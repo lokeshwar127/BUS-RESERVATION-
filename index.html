@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#1C130C" />
+  <title>BHARAT BUS — Golden Hour All-India Reservations</title>
+
+  <!-- Fonts: Syne, Anton, Space Grotesk, JetBrains Mono, Noto Sans Devanagari -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700;800&family=Noto+Sans+Devanagari:wght@400;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet">
+
+  <!-- Tailwind CSS (kept: app.js renders utility classes) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Space Grotesk"', 'sans-serif'],
+            display: ['"Anton"', 'sans-serif'],
+            stencil: ['"Syne"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+            deva: ['"Noto Sans Devanagari"', 'sans-serif'],
+          },
+          colors: {
+            ivory: '#FFFDF9',
+            sandstone: '#F5E6D3',
+            saffron: '#FF6B00',
+            goldhour: '#FF9E44',
+            marigold: '#FFB23F',
+            espresso: '#1C130C',
+            asphalt: '#261C15',
+            jade: '#1F8A4C',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Three.js (3D coach), RoundedBoxGeometry helper, GSAP + ScrollTrigger -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/geometries/RoundedBoxGeometry.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="bg-espresso text-ivory font-sans antialiased overflow-x-hidden selection:bg-saffron selection:text-white">
+
+  <!-- Scroll progress (tricolour) + cursor light -->
+  <div id="tricolorProgress" aria-hidden="true"></div>
+  <div id="cursorGlow" aria-hidden="true"></div>
+
+  <!-- Fixed 3D coach canvas + atmosphere -->
+  <canvas id="webglHangarCanvas" class="fixed inset-0 w-full h-full pointer-events-none z-0"></canvas>
+  <div class="golden-hour-vignette pointer-events-none fixed inset-0 z-10"></div>
+  <div class="film-grain-overlay pointer-events-none fixed inset-0 z-10"></div>
+
+  <!-- ===================================================================== -->
+  <!-- HEADER                                                                -->
+  <!-- ===================================================================== -->
+  <header class="fixed top-0 inset-x-0 z-40 px-4 sm:px-10 py-4 sm:py-5 flex flex-wrap items-center justify-between gap-4 pointer-events-none">
+
+    <div class="flex items-center gap-4 pointer-events-auto">
+      <button onclick="scrollToConsoleAndSwitchPassenger()" class="group flex items-center gap-2.5 font-stencil font-extrabold text-lg sm:text-xl tracking-tighter uppercase text-ivory transition">
+        <svg class="chakra w-7 h-7 shrink-0" viewBox="0 0 40 40" aria-hidden="true">
+          <circle cx="20" cy="20" r="18" fill="none" stroke="#FF9E44" stroke-width="1.5"/>
+          <circle cx="20" cy="20" r="12" fill="none" stroke="#FF6B00" stroke-width="2.6" stroke-dasharray="1.2 2.1"/>
+          <circle cx="20" cy="20" r="3.2" fill="#FF6B00"/>
+        </svg>
+        <span class="group-hover:text-goldhour transition">BHARAT<span class="text-saffron">BUS</span></span>
+      </button>
+
+      <div id="activeUserHeaderPill" class="hidden items-center gap-2.5 bg-espresso/85 backdrop-blur-md border border-goldhour/40 px-3.5 py-1.5 rounded-full font-mono text-[11px]">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="headerPassengerName" class="font-bold text-ivory uppercase"></span>
+        <span class="text-ivory/30">|</span>
+        <span id="headerWalletBalance" class="font-bold text-goldhour">₹0</span>
+      </div>
+    </div>
+
+    <nav class="step-nav pointer-events-auto flex flex-wrap items-center divide-x divide-sandstone/20 font-mono text-[10px] tracking-widest uppercase">
+      <button onclick="jumpToStepFromNav(1)" id="stepBtn1" class="step-pill active-step">01 REGISTER</button>
+      <button onclick="jumpToStepFromNav(2)" id="stepBtn2" class="step-pill">02 SIGN IN</button>
+      <button onclick="jumpToStepFromNav(3)" id="stepBtn3" class="step-pill">03 ROUTES</button>
+      <button onclick="jumpToStepFromNav(4)" id="stepBtn4" class="step-pill">04 SEATS</button>
+      <button onclick="jumpToStepFromNav(5)" id="stepBtn5" class="step-pill">05 5M TIMER</button>
+      <button onclick="jumpToStepFromNav(6)" id="stepBtn6" class="step-pill">06 PNR PASS</button>
+    </nav>
+  </header>
+
+  <!-- ===================================================================== -->
+  <!-- BOTTOM HUD                                                            -->
+  <!-- ===================================================================== -->
+  <div class="fixed bottom-4 inset-x-0 z-30 px-6 sm:px-10 flex items-center justify-between pointer-events-none font-mono text-[10px] tracking-[0.2em] uppercase text-sandstone/90">
+    <span class="hidden sm:inline">ALL-INDIA FLEET // BB-7869 GOLDEN HOUR</span>
+    <button onclick="scrollToReservationConsole()" class="pointer-events-auto mx-auto sm:mx-0 flex flex-col items-center gap-1 text-ivory hover:text-saffron transition">
+      <span id="scrollPromptLabel">BOOK YOUR SEAT ↓</span>
+      <span class="w-px h-4 bg-saffron animate-bounce"></span>
+    </button>
+    <span id="bottomTelemetryReadout">REFINING IMAGERY &nbsp; 18%</span>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- HERO: scroll-scrubbed 3D stage                                        -->
+  <!-- ===================================================================== -->
+  <section id="heroScrollTrack" class="relative z-10 w-full h-[220vh] pointer-events-none">
+    <div class="sticky top-0 w-full h-screen flex flex-col items-center justify-between overflow-hidden pt-24 sm:pt-28 pb-14">
+
+      <div id="heroGiantWordmark" class="w-full px-4 text-center select-none will-change-transform">
+        <h1 class="giant-stencil-banner">BHARATHBUS</h1>
+      </div>
+
+      <div id="heroCenterMonument" class="my-auto text-center select-none will-change-transform px-4">
+        <p class="section-eyebrow mb-4 hidden sm:block">यात्रा · Your journey starts here</p>
+        <div class="monumental-stack" role="heading" aria-level="2">
+          <div>RESERVE</div>
+          <div>RELAX</div>
+          <div>RIDE</div>
+        </div>
+      </div>
+
+      <!-- Live route ticker (duplicated for a seamless loop) -->
+      <div class="ticker w-full pointer-events-none" aria-label="Popular routes">
+        <div class="ticker-track">
+          <span>CHENNAI <i>⟶</i> MADURAI <b>₹426</b></span>
+          <span>BENGALURU <i>⟶</i> COIMBATORE <b>₹540</b></span>
+          <span>HYDERABAD <i>⟶</i> VIJAYAWADA <b>₹380</b></span>
+          <span>DELHI <i>⟶</i> JAIPUR <b>₹610</b></span>
+          <span>MUMBAI <i>⟶</i> PUNE <b>₹290</b></span>
+          <span>KOLKATA <i>⟶</i> PATNA <b>₹720</b></span>
+          <span>KOCHI <i>⟶</i> MYSURU <b>₹495</b></span>
+          <span>CHENNAI <i>⟶</i> MADURAI <b>₹426</b></span>
+          <span>BENGALURU <i>⟶</i> COIMBATORE <b>₹540</b></span>
+          <span>HYDERABAD <i>⟶</i> VIJAYAWADA <b>₹380</b></span>
+          <span>DELHI <i>⟶</i> JAIPUR <b>₹610</b></span>
+          <span>MUMBAI <i>⟶</i> PUNE <b>₹290</b></span>
+          <span>KOLKATA <i>⟶</i> PATNA <b>₹720</b></span>
+          <span>KOCHI <i>⟶</i> MYSURU <b>₹495</b></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- FEATURE BAND                                                          -->
+  <!-- ===================================================================== -->
+  <section id="featuresBand" class="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 pt-10">
+    <p class="section-eyebrow">Why travellers choose BharatBus</p>
+    <div class="jali-divider mt-2"></div>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div class="bharat-console-card feature-card">
+        <div class="feature-num">01</div>
+        <h3>5-Minute Seat Lock</h3>
+        <p>Hold your seat for five minutes while you pay. No double booking, no lost seats.</p>
+      </div>
+      <div class="bharat-console-card feature-card">
+        <div class="feature-num">02</div>
+        <h3>Fair First-Come Waitlist</h3>
+        <p>If a passenger does not pay in time, the next person in line gets the seat automatically.</p>
+      </div>
+      <div class="bharat-console-card feature-card">
+        <div class="feature-num">03</div>
+        <h3>Transparent 5% Cancellation</h3>
+        <p>You see the exact fee and refund before you confirm. 95% goes straight back to your wallet.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- CONSOLE: booking flow + admin                                         -->
+  <!-- ===================================================================== -->
+  <main id="reservationConsoleAnchor" class="relative z-20 max-w-6xl mx-auto px-4 sm:px-6 pt-14 pb-28">
+
+    <div id="passengerPortalSection">
+
+      <!-- PAGE 1: REGISTRATION -->
+      <section id="stepPage1" class="max-w-lg mx-auto">
+        <div class="bharat-console-card p-6 sm:p-8">
+          <div class="flex items-center justify-between pb-3 mb-5 border-b border-sandstone/20 font-mono text-[11px] tracking-widest uppercase">
+            <span class="text-goldhour font-bold">01 // PASSENGER REGISTRATION</span>
+            <span class="text-sandstone/60">STAGE 01 / 06</span>
+          </div>
+
+          <h2 class="font-display text-3xl sm:text-4xl uppercase tracking-wide text-ivory mb-1">
+            Create your account &amp; wallet
+          </h2>
+          <p class="text-xs text-sandstone/80 mb-6">
+            Register your details and choose how much balance (₹) to load into your dummy wallet.
+          </p>
+
+          <form onsubmit="handlePassengerRegister(event)" class="space-y-4">
+            <div>
+              <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/85 mb-1.5">Full name *</label>
+              <input id="regName" type="text" required placeholder="e.g., Karthik Raja" class="bharat-input" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/85 mb-1.5">Email address *</label>
+                <input id="regEmail" type="email" required placeholder="karthik@mail.in" class="bharat-input" />
+              </div>
+              <div>
+                <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/85 mb-1.5">Mobile number *</label>
+                <input id="regPhone" type="tel" required placeholder="9876543210" class="bharat-input" />
+              </div>
+            </div>
+
+            <div class="p-4 rounded-xl bg-espresso/90 border border-saffron/50">
+              <label class="block font-mono text-[10px] uppercase tracking-widest text-goldhour mb-1.5">Initial dummy wallet amount (₹) *</label>
+              <input id="regWallet" type="number" min="0" step="50" required value="2000" class="bharat-input font-mono text-base font-bold text-ivory" />
+            </div>
+
+            <button type="submit" class="bharat-cta-btn w-full py-3.5">
+              Register &amp; continue to sign in →
+            </button>
+          </form>
+
+          <div id="alreadyRegisteredBar" class="hidden mt-5 pt-3 border-t border-sandstone/20 text-center">
+            <button onclick="goToStep(2)" class="font-mono text-xs text-goldhour hover:text-ivory underline underline-offset-4 uppercase tracking-widest">
+              Already registered? Sign in →
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-4 text-center">
+          <button onclick="openAdminLoginModal()" class="font-mono text-[11px] text-sandstone/80 hover:text-goldhour underline underline-offset-4 tracking-widest uppercase transition">
+            Admin portal access →
+          </button>
+        </div>
+      </section>
+
+      <!-- PAGE 2: SIGN IN -->
+      <section id="stepPage2" class="hidden max-w-lg mx-auto">
+        <div class="bharat-console-card p-6 sm:p-8">
+          <div class="flex items-center justify-between pb-3 mb-5 border-b border-sandstone/20 font-mono text-[11px] tracking-widest uppercase">
+            <span class="text-goldhour font-bold">02 // SIGN IN</span>
+            <button onclick="goToStep(1)" class="text-ivory hover:text-goldhour underline underline-offset-4">+ New passenger</button>
+          </div>
+
+          <h2 class="font-display text-3xl sm:text-4xl uppercase tracking-wide text-ivory mb-1">
+            Sign in to your account
+          </h2>
+          <p class="text-xs text-sandstone/80 mb-6">
+            Confirm your registered details and wallet balance to continue to route selection.
+          </p>
+
+          <div class="space-y-4">
+            <div>
+              <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/85 mb-1.5">Select registered passenger</label>
+              <select id="loginPassengerSelect" onchange="renderLoginPreviewCard()" class="bharat-input font-mono text-xs uppercase"></select>
+            </div>
+
+            <div id="loginProfileCard" class="rounded-xl bg-espresso/90 border border-sandstone/25 p-4 font-mono text-xs space-y-2"></div>
+
+            <button onclick="handlePassengerLogin()" class="bharat-cta-btn w-full py-3.5">
+              Sign in &amp; choose route →
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 3: ROUTES + BUSES -->
+      <section id="stepPage3" class="hidden space-y-6">
+        <div class="bharat-console-card p-6">
+          <div class="flex flex-wrap items-center justify-between gap-3 pb-3 mb-5 border-b border-sandstone/20">
+            <div>
+              <span class="section-eyebrow block">03 // All-India route &amp; live dispatch</span>
+              <h2 class="font-display text-3xl uppercase tracking-wide text-ivory">Choose boarding &amp; arrival</h2>
+            </div>
+            <button onclick="goToStep(2)" class="px-3.5 py-1.5 rounded-lg border border-sandstone/35 font-mono text-[11px] text-ivory hover:bg-saffron hover:border-saffron uppercase tracking-widest transition">
+              ← Switch passenger
+            </button>
+          </div>
+
+          <datalist id="indiaCitiesList"></datalist>
+
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+            <div class="md:col-span-5">
+              <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/85 mb-1.5">Boarding point</label>
+              <input id="fromCityInput" list="indiaCitiesList" value="Chennai, Tamil Nadu" class="bharat-input" />
+            </div>
+
+            <div class="md:col-span-2 flex justify-center">
+              <button onclick="swapCities()" class="w-full py-2.5 px-3 rounded-lg border border-sandstone/35 bg-espresso/80 hover:bg-saffron hover:border-saffron hover:text-white font-mono text-xs font-bold uppercase tracking-widest transition">
+                ⇄ Swap
+              </button>
+            </div>
+
+            <div class="md:col-span-5">
+              <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/85 mb-1.5">Arrival point</label>
+              <input id="toCityInput" list="indiaCitiesList" value="Madurai, Tamil Nadu" class="bharat-input" />
+            </div>
+          </div>
+
+          <div class="mt-5 flex justify-end">
+            <button onclick="searchRouteBuses()" class="bharat-cta-btn px-6 py-3">
+              Find live buses on this route →
+            </button>
+          </div>
+        </div>
+
+        <div class="bharat-console-card p-6">
+          <div class="flex items-center justify-between pb-3 mb-4 border-b border-sandstone/20">
+            <h3 class="font-mono text-xs font-bold uppercase tracking-widest text-ivory">Buses available on selected route</h3>
+            <span class="font-mono text-[11px] text-goldhour uppercase">Flexible timings</span>
+          </div>
+          <div id="busListContainer" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+        </div>
+      </section>
+
+      <!-- PAGE 4: SEAT MAP -->
+      <section id="stepPage4" class="hidden grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div class="lg:col-span-7 bharat-console-card p-6">
+          <div class="flex flex-wrap items-center justify-between gap-2 pb-3 mb-4 border-b border-sandstone/20">
+            <div>
+              <span class="section-eyebrow block">04 // 40-seat deck (10 rows × 4)</span>
+              <h2 id="seatPageBusTitle" class="font-display text-3xl uppercase tracking-wide text-ivory">Select seat</h2>
+              <p id="seatPageRouteSubtitle" class="font-mono text-xs text-sandstone/80"></p>
+            </div>
+            <button onclick="goToStep(3)" class="px-3 py-1.5 rounded-lg border border-sandstone/35 font-mono text-[11px] text-ivory hover:bg-saffron uppercase transition">
+              ← Change bus
+            </button>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 font-mono text-[11px] mb-5 bg-espresso/90 p-3 rounded-xl border border-sandstone/25">
+            <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-emerald-400 inline-block"></span> Available</span>
+            <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-saffron inline-block animate-pulse"></span> 5-min lock</span>
+            <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-sm bg-ivory inline-block"></span> Booked</span>
+          </div>
+
+          <div class="max-w-md mx-auto bg-espresso/95 rounded-2xl border border-sandstone/30 p-4">
+            <div class="border-b border-sandstone/20 pb-2 mb-3 flex justify-between font-mono text-[10px] text-sandstone/60 uppercase tracking-widest">
+              <span>Window</span>
+              <span class="text-goldhour font-bold">▲ Cockpit</span>
+              <span>Window</span>
+            </div>
+            <div id="seatGridContainer" class="space-y-2"></div>
+          </div>
+        </div>
+
+        <div class="lg:col-span-5 space-y-4">
+          <div id="selectedSeatActionBox" class="bharat-console-card p-6">
+            <p class="font-mono text-xs text-sandstone/80 uppercase">
+              Select any seat (1–40) to lock it for 5 minutes or join its waiting list.
+            </p>
+          </div>
+
+          <div class="bharat-console-card p-6">
+            <div class="flex items-center justify-between pb-2 mb-3 border-b border-sandstone/20">
+              <h3 class="font-mono text-xs font-bold uppercase tracking-widest text-goldhour">Waiting list demo</h3>
+              <button onclick="goToStep(1)" class="font-mono text-[11px] text-ivory hover:text-goldhour underline underline-offset-4 uppercase">+ 2nd passenger</button>
+            </div>
+            <p class="text-xs text-sandstone/85 leading-relaxed">
+              Lock a seat with passenger 1, then sign in as passenger 2 and join the same seat's waiting list. If passenger 1 does not pay within five minutes, passenger 2 gets the lock automatically.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 5: PAYMENT TIMER + WALLET -->
+      <section id="stepPage5" class="hidden max-w-2xl mx-auto space-y-5">
+        <div class="bharat-console-card p-6 sm:p-8 space-y-5">
+          <div class="flex items-center justify-between pb-3 border-b border-sandstone/20">
+            <span class="font-mono text-xs font-bold uppercase tracking-widest text-goldhour">05 // 5-minute lock &amp; payment</span>
+            <button onclick="goToStep(4)" class="font-mono text-xs text-sandstone/80 hover:text-ivory uppercase">← Back to seats</button>
+          </div>
+
+          <div id="paymentPortalContent"></div>
+
+          <div class="rounded-xl bg-espresso/95 border border-sandstone/30 p-4">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p class="font-mono text-[10px] text-goldhour uppercase tracking-widest">Active passenger wallet</p>
+                <p id="paymentWalletSummary" class="font-mono text-lg font-bold text-ivory">₹0</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <input id="customTopupInput" type="number" min="50" step="50" value="500" class="w-28 px-3 py-2 rounded-lg bg-asphalt border border-sandstone/35 font-mono text-xs text-ivory" />
+                <button onclick="topUpActivePassengerWallet()" class="px-4 py-2 rounded-lg bg-saffron hover:bg-goldhour text-white font-mono text-xs font-bold uppercase tracking-widest transition">
+                  + Add ₹
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- PAGE 6: CONFIRMATION -->
+      <section id="stepPage6" class="hidden max-w-3xl mx-auto space-y-6">
+        <div id="confirmationDetailsBox" class="bharat-console-card p-6 sm:p-8"></div>
+      </section>
+
+    </div>
+
+    <!-- ADMIN PORTAL -->
+    <div id="adminPortalSection" class="hidden space-y-6">
+      <div class="bharat-console-card p-6 border-2 border-saffron flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span class="section-eyebrow block">Authenticated administrator</span>
+          <h2 class="font-display text-3xl uppercase tracking-wide text-ivory">Passenger manifest &amp; seat lock</h2>
+          <p class="font-mono text-xs text-sandstone/80">ADMIN: bharathtrs@bharathmail.in • Lock any seat without a timer</p>
+        </div>
+        <button onclick="logoutAdmin()" class="px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-ivory text-ivory hover:text-espresso font-mono text-xs font-bold uppercase tracking-widest transition">
+          Lock &amp; logout
+        </button>
+      </div>
+
+      <div class="bharat-console-card p-6 space-y-4">
+        <h3 class="font-mono text-xs font-bold uppercase tracking-widest text-goldhour">Instant seat lock (no timer)</h3>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+          <div>
+            <label class="block font-mono text-[10px] text-sandstone/80 uppercase mb-1.5">Select bus</label>
+            <select id="adminBusSelect" class="bharat-input font-mono text-xs"></select>
+          </div>
+          <div>
+            <label class="block font-mono text-[10px] text-sandstone/80 uppercase mb-1.5">Seat no (1–40)</label>
+            <input id="adminSeatInput" type="number" min="1" max="40" value="1" class="bharat-input font-mono text-xs" />
+          </div>
+          <div>
+            <label class="block font-mono text-[10px] text-sandstone/80 uppercase mb-1.5">Passenger / VIP name</label>
+            <input id="adminHolderInput" type="text" placeholder="VIP / Walk-in" class="bharat-input font-mono text-xs" />
+          </div>
+          <button onclick="adminLockSeatNoTimer()" class="bharat-cta-btn py-3 px-4">
+            Lock seat →
+          </button>
+        </div>
+      </div>
+
+      <div class="bharat-console-card p-6">
+        <h3 class="font-mono text-xs font-bold uppercase tracking-widest text-ivory pb-2 mb-3 border-b border-sandstone/20">Registered passengers &amp; wallets</h3>
+        <div id="adminPassengerTable" class="overflow-x-auto font-mono text-xs"></div>
+      </div>
+
+      <div class="bharat-console-card p-6">
+        <h3 class="font-mono text-xs font-bold uppercase tracking-widest text-ivory pb-2 mb-3 border-b border-sandstone/20">All reserved &amp; locked seats</h3>
+        <div id="adminSeatManifestTable" class="overflow-x-auto font-mono text-xs"></div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: ADMIN LOGIN                                                    -->
+  <!-- ===================================================================== -->
+  <div id="adminAuthModal" class="fixed inset-0 bg-espresso/90 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+    <div class="bharat-console-card max-w-md w-full p-6 sm:p-8 space-y-4 border-2 border-saffron">
+      <div class="flex items-center justify-between pb-2 border-b border-sandstone/20">
+        <h3 class="font-display text-2xl uppercase tracking-wide text-ivory">Admin sign in</h3>
+        <button onclick="closeAdminLoginModal()" class="font-mono text-sm text-sandstone/70 hover:text-ivory transition">✕</button>
+      </div>
+      <p class="text-xs text-sandstone/80">Restricted access. Enter the authorized administrator email and password.</p>
+      <form onsubmit="handleAdminLogin(event)" class="space-y-3">
+        <div>
+          <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/80 mb-1.5">Admin email</label>
+          <input id="adminEmailInput" type="email" required placeholder="bharathtrs@bharathmail.in" class="bharat-input" />
+        </div>
+        <div>
+          <label class="block font-mono text-[10px] uppercase tracking-widest text-sandstone/80 mb-1.5">Admin password</label>
+          <input id="adminPasswordInput" type="password" required placeholder="••••••••••" class="bharat-input" />
+        </div>
+        <p id="adminAuthError" class="hidden font-mono text-xs text-rose-400 font-bold">
+          Invalid admin email or password. Access denied.
+        </p>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="button" onclick="closeAdminLoginModal()" class="px-4 py-2 rounded-lg border border-sandstone/35 font-mono text-xs uppercase hover:bg-white/5 transition">Cancel</button>
+          <button type="submit" class="bharat-cta-btn px-5 py-2.5">Verify &amp; unlock →</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL: CANCELLATION CONFIRMATION (5% FEE)                             -->
+  <!-- ===================================================================== -->
+  <div id="cancelConfirmModal" class="fixed inset-0 bg-espresso/90 backdrop-blur-md hidden items-center justify-center z-50 p-4">
+    <div class="bharat-console-card max-w-md w-full p-6 sm:p-8 space-y-4 border-2 border-saffron">
+      <h3 class="font-display text-3xl uppercase tracking-wide text-ivory">Confirm cancellation</h3>
+      <p class="text-xs text-sandstone/85 leading-relaxed">
+        Cancelling deducts a <strong>5% cancellation charge</strong> from the fare. The remaining <strong>95%</strong> is refunded immediately to your wallet.
+      </p>
+      <div id="cancelFeeBreakdownBox" class="rounded-xl bg-espresso/90 border border-sandstone/30 p-3.5 font-mono text-xs space-y-1.5"></div>
+      <div class="flex justify-end gap-2 pt-2">
+        <button onclick="closeCancelModal()" class="px-4 py-2 rounded-lg border border-sandstone/35 font-mono text-xs uppercase hover:bg-white/5 transition">Keep my seat</button>
+        <button onclick="confirmCancelWithFivePercentFee()" class="px-5 py-2 rounded-lg bg-rose-600 hover:bg-ivory text-ivory hover:text-espresso font-mono text-xs font-bold uppercase tracking-widest transition">
+          Pay 5% &amp; cancel
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- App logic first (unchanged), then the motion/interaction layer -->
+  <script src="app.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
